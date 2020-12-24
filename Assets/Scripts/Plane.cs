@@ -5,21 +5,23 @@ namespace Assets.Scripts
 {
     public class Plane : MonoBehaviour
     {
-        private const float AltitudeDelta = 20.0f;
-        private const float PitchSpeed = 45.0f;
+        private const float PitchSpeed = 45f;
         private const float MaxPitch = 45f;
         private const float Precision = 0.01f;
-        private const float Threshold = AltitudeDelta * 2f / 10f;
 
         private float _initialAltitude;
         private float _minAltitude;
         private float _maxAltitude;
+        private float _threshold;
 
         private void Start()
         {
             _initialAltitude = transform.position.y;
-            _minAltitude = _initialAltitude - AltitudeDelta;
-            _maxAltitude = _initialAltitude + AltitudeDelta;
+            var planeHeight = GetComponent<MeshRenderer>().bounds.size.y;
+            var distanceToCamera = Math.Abs(transform.position.x - Camera.main.transform.position.x);
+            _minAltitude = Camera.main.ScreenToWorldPoint(new Vector3(0, 0, distanceToCamera)).y ;
+            _maxAltitude = Camera.main.ScreenToWorldPoint(new Vector3(0, Screen.height, distanceToCamera)).y - planeHeight;
+            _threshold = (_maxAltitude - _minAltitude) * 0.2f;
         }
 
         private void Update()
@@ -27,13 +29,14 @@ namespace Assets.Scripts
             var altitude = transform.position.y;
             var currentPitch = CurrentPitchAngle(); // Down: positive; Up: negative
 
-            var acceleration = (float)Math.Cos(NormalizeAltitude(altitude));
+            // Fast in the middle of the screen, slows to the up and down edges
+            var acceleration = NormalizeAltitude(altitude);
 
             var pitchInput = Input.GetAxis("Vertical"); // Down: 1; Up: -1
 
             // Keep the plane within the allowed heights and pitches ranges
-            if (pitchInput > 0f && altitude <= _minAltitude + Threshold ||
-                pitchInput < 0f && altitude >= _maxAltitude - Threshold)
+            if (pitchInput > 0f && altitude <= _minAltitude + _threshold ||
+                pitchInput < 0f && altitude >= _maxAltitude - _threshold)
             {
                 pitchInput = 0f;
             }
@@ -46,7 +49,7 @@ namespace Assets.Scripts
                     return;
                 }
 
-                pitchInput = -transform.rotation.x / (acceleration == 0 ? 1f : acceleration);
+                pitchInput = -transform.rotation.x / (acceleration == 0f ? 1f : acceleration);
             }
 
             var deltaPitch = Time.deltaTime * PitchSpeed * pitchInput;
@@ -58,8 +61,8 @@ namespace Assets.Scripts
                 currentPitch = expectedPitch;
             }
 
-            if (currentPitch < 0 && altitude < _initialAltitude ||
-                currentPitch > 0 && altitude > _initialAltitude)
+            if (currentPitch < 0f && altitude < _initialAltitude ||
+                currentPitch > 0f && altitude > _initialAltitude)
             {
                 acceleration = 1f;
             }
@@ -85,7 +88,9 @@ namespace Assets.Scripts
             const float newMin = -newMax;
             var min = _minAltitude;
             var max = _maxAltitude;
-            return (newMax - newMin) / (max - min) * (value - min) + newMin;
+            var normalized = (newMax - newMin) / (max - min) * (value - min) + newMin;
+
+            return (float)Math.Cos(normalized);
         }
     }
 }
